@@ -8,8 +8,19 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "migrate": "node-pg-migrate -m migrations --migration-file-language sql",
+    "migrate:down": "node-pg-migrate -m migrations --migration-file-language sql down",
+    "migrate:up": "node-pg-migrate -m migrations --migration-file-language sql up",
+    "migrate:create": "node-pg-migrate -m migrations --migration-file-language sql create",
+    "seed": "node --env-file=.env src/db/seed.js"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
+    "dotenv": "^18.0.7",
+    "node-pg-migrate": "^9.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  }
 }
