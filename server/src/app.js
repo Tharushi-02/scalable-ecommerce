@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import authRoutes from './modules/auth/auth.routes.js';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '1mb' }));
 if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 app.use('/health', healthRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
