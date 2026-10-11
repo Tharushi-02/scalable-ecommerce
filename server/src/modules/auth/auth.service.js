@@ -104,3 +104,12 @@ export async function logout(refreshToken) {
     await repo.revokeRefreshToken(stored.id);
   }
 }
+
+
+export async function getMe(userId) {
+  const user = await repo.findUserById(userId);
+  if (!user) {
+    throw new HttpError(404, 'User not found');
+  }
+  return toPublicUser(user);
+}
