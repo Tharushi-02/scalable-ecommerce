@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import bcrypt from 'bcryptjs';
 import { pool } from './pool.js';
+import { slugify } from '../utils/slugify.js';
 
 const PRODUCT_COUNT = 1000;
 const CUSTOMER_COUNT = 20;
@@ -23,11 +24,7 @@ const CATEGORIES = [
 ];
 
 // "Home & Kitchen" -> "home-kitchen"
-const slugify = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+
 
 // Inserts many rows in ONE query: INSERT ... VALUES ($1,$2), ($3,$4), ...
 async function insertMany(client, table, columns, rows) {
