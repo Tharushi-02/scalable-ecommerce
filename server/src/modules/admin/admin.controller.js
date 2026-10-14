@@ -12,5 +12,13 @@ export async function getUser(req, res) {
   if (!user) {
     throw new HttpError(404, 'User not found');
   }
-  res.json({ user });
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      createdAt: user.created_at,
+    },
+  });
 }

@@ -95,6 +95,7 @@ Check 'update: empty body'          400 { Patch "/products/$prodId" '{}' $adminH
 Check 'delete: customer'            403 { DeleteRequest "/products/$prodId" $custH }
 Check 'delete: admin'               204 { DeleteRequest "/products/$prodId" $adminH }
 Check 'get: deleted is hidden'      404 { Get "/products/$prodId" }
-
+Check 'api docs page'             200 { Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/api-docs/' }
+Check 'api docs json'             200 { Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/api-docs.json' }
 
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

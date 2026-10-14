@@ -1,0 +1,563 @@
+openapi: 3.0.3
+info:
+  title: Scalable E-Commerce API
+  version: 1.0.0
+  description: |
+    Backend for a scalable e-commerce platform built with Node.js, Express 5 and PostgreSQL.
+
+    Public endpoints need no login. Protected endpoints need an access token:
+    log in, then click **Authorize** and paste the `accessToken`.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+
+tags:
+  - name: Health
+    description: Service status
+  - name: Auth
+    description: Register, log in, refresh tokens, log out
+  - name: Products
+    description: Browse the catalogue (public) and manage products (admin)
+  - name: Admin
+    description: Admin-only tools
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check that the API and database are running
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: API and database are healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  db: { type: string, example: connected }
+                  uptime: { type: number, example: 12.5 }
+        '500':
+          description: The database is unreachable
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a customer account
+      operationId: register
+      security: []
+      description: >
+        Creates a user with the customer role and logs them in straight away.
+        The email is trimmed and lowercased. Unknown fields (such as role) are ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, maxLength: 100, example: Jane Perera }
+                email: { type: string, format: email, maxLength: 255, example: jane@example.com }
+                password: { type: string, minLength: 8, maxLength: 72, example: secret123 }
+      responses:
+        '201':
+          description: Account created; returns the user and both tokens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: The email is already registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Email is already registered }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      operationId: login
+      security: []
+      description: >
+        Returns a 15-minute access token and a 7-day single-use refresh token.
+        A wrong password and an unknown email give the same 401 response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: admin@example.com }
+                password: { type: string, example: Password123! }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Wrong email or password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Invalid email or password }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Swap a refresh token for new tokens
+      operationId: refreshTokens
+      security: []
+      description: >
+        Each refresh token works only once (rotation). Reusing an old token is treated
+        as theft, and every session for that user is revoked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string, example: 3a482afe042b6f79...e183e6f8df2f1f53 }
+      responses:
+        '200':
+          description: New access token and new refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: The refresh token is invalid, expired, or was already used
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                invalid:
+                  summary: Unknown or expired token
+                  value: { error: Invalid or expired refresh token }
+                reused:
+                  summary: Token already used, so all sessions were revoked
+                  value: { error: Refresh token reuse detected. Please log in again. }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out on this device
+      operationId: logout
+      security: []
+      description: >
+        Revokes the given refresh token. Always returns 204, even for unknown tokens.
+        The access token keeps working until it expires (up to 15 minutes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204':
+          description: Logged out (no response body)
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the logged-in user
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/products:
+    get:
+      tags: [Products]
+      summary: List products (paginated, filterable, searchable)
+      operationId: listProducts
+      security: []
+      description: >
+        Public. Only active products are returned. All filters can be combined.
+        Every sort order ends with the product id as a tie-breaker, so pages never overlap.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          description: Items per page (maximum 100)
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: category
+          in: query
+          description: Category slug, for example books or home-kitchen
+          schema: { type: string }
+        - name: minPrice
+          in: query
+          schema: { type: number, minimum: 0 }
+        - name: maxPrice
+          in: query
+          description: Must be greater than or equal to minPrice
+          schema: { type: number, minimum: 0 }
+        - name: inStock
+          in: query
+          description: true = stock above 0, false = out of stock only
+          schema: { type: string, enum: ['true', 'false'] }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, price_asc, price_desc, name_asc]
+            default: newest
+        - name: q
+          in: query
+          description: Search text, matched against name and description (case-insensitive)
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: One page of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+    post:
+      tags: [Products]
+      summary: Create a product (admin)
+      operationId: createProduct
+      description: >
+        The slug is generated from the name. If it is already taken,
+        a short random suffix is added (for example ergonomic-chair-a3f9c1).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price, categoryId]
+              properties:
+                name: { type: string, maxLength: 200, example: Ergonomic Office Chair }
+                description: { type: string, maxLength: 5000, example: Adjustable lumbar support }
+                price:
+                  description: Number or string, not negative, at most 2 decimals
+                  oneOf:
+                    - type: number
+                    - type: string
+                  example: 249.99
+                stock: { type: integer, minimum: 0, default: 0, example: 25 }
+                categoryId: { type: integer, minimum: 1, example: 4 }
+                imageUrl: { type: string, format: uri, example: 'https://picsum.photos/seed/chair/640/480' }
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/ProductBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/products/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags: [Products]
+      summary: Get one product
+      operationId: getProduct
+      security: []
+      description: Public. Inactive (soft-deleted) products return 404.
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Products]
+      summary: Update a product (admin)
+      operationId: updateProduct
+      description: >
+        Only the fields you send are changed. Send null to clear description or imageUrl.
+        Send isActive true to restore a deleted product. The slug never changes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, maxLength: 200 }
+                description: { type: string, maxLength: 5000, nullable: true }
+                price:
+                  oneOf:
+                    - type: number
+                    - type: string
+                stock: { type: integer, minimum: 0 }
+                categoryId: { type: integer, minimum: 1 }
+                imageUrl: { type: string, format: uri, nullable: true }
+                isActive: { type: boolean }
+            example:
+              price: 199.99
+              stock: 40
+      responses:
+        '200':
+          description: The updated product (admin view, includes isActive)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/AdminProduct' }
+        '400': { $ref: '#/components/responses/ProductBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    delete:
+      tags: [Products]
+      summary: Delete a product (admin, soft delete)
+      operationId: deleteProduct
+      description: >
+        Hides the product (isActive = false) instead of erasing it, because past orders
+        still reference it. Restore it with PATCH { "isActive": true }.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Product hidden (no response body)
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Store statistics (admin)
+      operationId: getAdminStats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Counts of users, products and orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users: { type: integer, example: 21 }
+                  products: { type: integer, example: 1000 }
+                  orders: { type: integer, example: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    get:
+      tags: [Admin]
+      summary: Get any user by id (admin)
+      operationId: getUserById
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The user (never includes the password hash)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    allOf:
+                      - $ref: '#/components/schemas/User'
+                      - type: object
+                        properties:
+                          createdAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No user with this id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: User not found }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /api/v1/auth/login (valid for 15 minutes)
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      description: Numeric ID
+      schema:
+        type: integer
+        minimum: 1
+        example: 42
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, example: Product not found }
+
+    ValidationError:
+      type: object
+      properties:
+        error: { type: string, example: Validation failed }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, example: body.price }
+              message: { type: string, example: Price must be a positive amount with at most 2 decimals }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, example: '4' }
+        name: { type: string, example: Home & Kitchen }
+        slug: { type: string, example: home-kitchen }
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '42'
+          description: Returned as a string (64-bit integer in the database)
+        name: { type: string, example: Ergonomic Office Chair }
+        slug: { type: string, example: ergonomic-office-chair }
+        description: { type: string, nullable: true, example: Adjustable lumbar support }
+        price:
+          type: string
+          example: '249.99'
+          description: Exact decimal as a string, to avoid floating-point rounding
+        stock: { type: integer, example: 25 }
+        imageUrl: { type: string, format: uri, nullable: true, example: 'https://picsum.photos/seed/product-42/640/480' }
+        category: { $ref: '#/components/schemas/Category' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AdminProduct:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            isActive: { type: boolean, example: true }
+
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 1000 }
+        totalPages: { type: integer, example: 50 }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, example: '2' }
+        email: { type: string, format: email, example: customer1@example.com }
+        name: { type: string, example: Jane Perera }
+        role: { type: string, enum: [customer, admin], example: customer }
+
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accessToken: { type: string, example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... }
+        refreshToken: { type: string, example: 3a482afe042b6f79...e183e6f8df2f1f53 }
+
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    Unauthorized:
+      description: Missing, invalid or expired access token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Authentication required }
+    Forbidden:
+      description: Logged in, but not allowed (admin only)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: You do not have permission to do this }
+    NotFound:
+      description: The resource does not exist
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Product not found }
+    ProductBadRequest:
+      description: Invalid input, or the category does not exist
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - $ref: '#/components/schemas/ValidationError'
+              - $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              summary: Validation failed
+              value:
+                error: Validation failed
+                details:
+                  - field: body.price
+                    message: Price must be a positive amount with at most 2 decimals
+            category:
+              summary: Unknown category
+              value: { error: Category does not exist }

@@ -9,6 +9,8 @@ import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import productRoutes from './modules/products/products.routes.js';
+import { openapiSpec, swaggerServe, swaggerSetup } from './docs/swagger.js';
+
 const app = express();
 
 app.use(helmet());
@@ -23,6 +25,14 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/products', productRoutes);
+
+// API documentation
+app.get('/api-docs.json', (req, res) => res.json(openapiSpec));
+app.use('/api-docs', swaggerServe, swaggerSetup);
+
+app.use(notFound);
+app.use(errorHandler);
 
 app.use(notFound);
 app.use(errorHandler);
