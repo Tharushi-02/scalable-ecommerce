@@ -29,6 +29,7 @@ export const errorHandler = (err, req, res, next) => {
   if (status >= 500) console.error(err);
   res.status(status).json({
     error: status >= 500 ? 'Internal server error' : err.message,
+    ...(status < 500 && err.details && { details: err.details }),
     ...(env.NODE_ENV === 'development' && status >= 500 && { stack: err.stack }),
   });
 };

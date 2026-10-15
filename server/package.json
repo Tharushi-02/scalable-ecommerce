@@ -13,7 +13,8 @@
     "migrate:down": "node-pg-migrate -m migrations --migration-file-language sql down",
     "migrate:up": "node-pg-migrate -m migrations --migration-file-language sql up",
     "migrate:create": "node-pg-migrate -m migrations --migration-file-language sql create",
-    "seed": "node --env-file=.env src/db/seed.js"
+    "seed": "node --env-file=.env src/db/seed.js",
+    "race": "node --env-file=.env scripts/race-test.js"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",

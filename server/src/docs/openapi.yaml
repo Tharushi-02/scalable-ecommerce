@@ -22,6 +22,8 @@ tags:
     description: Admin-only tools
   - name: Cart
     description: The logged-in user's shopping cart
+  - name: Orders
+    description: Checkout and order history
 
 paths:
   /health:
@@ -587,6 +589,119 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: This product is not in your cart }
 
+  /api/v1/orders:
+    post:
+      tags: [Orders]
+      summary: Check out (turn my cart into an order)
+      operationId: checkout
+      description: >
+        Runs in one transaction: locks the cart's products (sorted by id), re-checks
+        availability and stock, decrements stock, creates the order with price and address
+        snapshots, and empties the cart. The total is always calculated by the server.
+        If anything fails, nothing changes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipping]
+              properties:
+                shipping: { $ref: '#/components/schemas/ShippingAddress' }
+      responses:
+        '201':
+          description: Order created (status pending)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '400':
+          description: Invalid address, or the cart is empty
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/Error'
+              examples:
+                validation:
+                  summary: Missing address fields
+                  value:
+                    error: Validation failed
+                    details:
+                      - field: body.shipping.city
+                        message: City is required
+                empty:
+                  summary: Empty cart
+                  value: { error: Your cart is empty }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Some items can't be ordered (nothing was changed)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutConflict' }
+
+    get:
+      tags: [Orders]
+      summary: List my orders (newest first)
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          description: Orders per page (maximum 50)
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: One page of order summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrderSummary' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/orders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    get:
+      tags: [Orders]
+      summary: Get one of my orders
+      operationId: getOrder
+      description: Other users' orders return 404, so their existence is never revealed.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The order, with items and shipping address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No such order for this user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Order not found }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -720,6 +835,63 @@ components:
       type: object
       properties:
         cart: { $ref: '#/components/schemas/Cart' }
+
+    ShippingAddress:
+      type: object
+      required: [name, line1, city, postalCode, country]
+      properties:
+        name: { type: string, maxLength: 100, example: Jane Perera }
+        line1: { type: string, maxLength: 200, example: 12 Temple Road }
+        line2: { type: string, maxLength: 200, nullable: true, example: Apartment 4B }
+        city: { type: string, maxLength: 100, example: Kandy }
+        postalCode: { type: string, maxLength: 20, example: '20000' }
+        country: { type: string, maxLength: 100, example: Sri Lanka }
+
+    OrderItem:
+      type: object
+      properties:
+        productId: { type: string, example: '1' }
+        productName: { type: string, example: Handmade Ceramic Bike, description: Snapshot at checkout }
+        unitPrice: { type: string, example: '199.99', description: 'Price paid (snapshot, never changes)' }
+        quantity: { type: integer, example: 2 }
+        lineTotal: { type: string, example: '399.98' }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, example: '12' }
+        status: { type: string, enum: [pending, paid, shipped, delivered, cancelled], example: pending }
+        totalAmount: { type: string, example: '429.98' }
+        shipping: { $ref: '#/components/schemas/ShippingAddress' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string, example: '12' }
+        status: { type: string, enum: [pending, paid, shipped, delivered, cancelled], example: pending }
+        totalAmount: { type: string, example: '429.98' }
+        itemCount: { type: integer, example: 5, description: Total units in the order }
+        createdAt: { type: string, format: date-time }
+
+    CheckoutConflict:
+      type: object
+      properties:
+        error: { type: string, example: "Some items in your cart can't be ordered" }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              productId: { type: string, example: '1' }
+              name: { type: string, example: Handmade Ceramic Bike }
+              issue: { type: string, enum: [unavailable, out_of_stock, insufficient_stock] }
+              requested: { type: integer, example: 5 }
+              available: { type: integer, example: 2 }
 
   responses:
     BadRequest:

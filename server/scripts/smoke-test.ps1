@@ -112,4 +112,16 @@ Check 'cart: set zero'              400 { Patch '/cart/items/1' '{"quantity":0}'
 Check 'cart: set not in cart'       404 { Patch '/cart/items/2' '{"quantity":1}' $custH }
 Check 'cart: remove item'           200 { DeleteRequest '/cart/items/1' $custH }
 Check 'cart: remove again'          404 { DeleteRequest '/cart/items/1' $custH }
+Write-Host "`n--- Orders ---"
+Check 'orders: no token'             401 { Get '/orders' }
+Check 'orders: list'                 200 { Get '/orders' $custH }
+Check 'checkout: empty cart'         400 { DeleteRequest '/cart' $custH | Out-Null; Post '/orders' '{"shipping":{"name":"T","line1":"1 St","city":"Kandy","postalCode":"20000","country":"LK"}}' $custH }
+Check 'checkout: missing address'    400 { Post '/orders' '{"shipping":{"name":"T"}}' $custH }
+Check 'checkout: success'            201 { Post '/cart/items' '{"productId":10,"quantity":1}' $custH | Out-Null; $script:order = Post '/orders' '{"shipping":{"name":"T","line1":"1 St","city":"Kandy","postalCode":"20000","country":"LK"}}' $custH; $script:order }
+$orderId = ($order.Content | ConvertFrom-Json).order.id
+Check 'order: get own'               200 { Get "/orders/$orderId" $custH }
+Check 'order: other user (admin)'    404 { Get "/orders/$orderId" $adminH }
+Check 'order: invalid id'            400 { Get '/orders/abc' $custH }
+Check 'order: not found'             404 { Get '/orders/99999999' $custH }
+
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
