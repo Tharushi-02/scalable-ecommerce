@@ -97,5 +97,19 @@ Check 'delete: admin'               204 { DeleteRequest "/products/$prodId" $adm
 Check 'get: deleted is hidden'      404 { Get "/products/$prodId" }
 Check 'api docs page'             200 { Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/api-docs/' }
 Check 'api docs json'             200 { Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/api-docs.json' }
-
+Write-Host "`n--- Cart ---"
+Check 'cart: no token'              401 { Get '/cart' }
+Check 'cart: clear'                 200 { DeleteRequest '/cart' $custH }
+Check 'cart: view empty'            200 { Get '/cart' $custH }
+Check 'cart: add item'              200 { Post '/cart/items' '{"productId":1,"quantity":1}' $custH }
+Check 'cart: add same again'        200 { Post '/cart/items' '{"productId":1}' $custH }
+Check 'cart: add over 99'           400 { Post '/cart/items' '{"productId":1,"quantity":99}' $custH }
+Check 'cart: add unknown product'   404 { Post '/cart/items' '{"productId":99999}' $custH }
+Check 'cart: add invalid id'        400 { Post '/cart/items' '{"productId":"abc"}' $custH }
+Check 'cart: set quantity'          200 { Patch '/cart/items/1' '{"quantity":1}' $custH }
+Check 'cart: set above stock'       409 { Patch '/cart/items/1' '{"quantity":99}' $custH }
+Check 'cart: set zero'              400 { Patch '/cart/items/1' '{"quantity":0}' $custH }
+Check 'cart: set not in cart'       404 { Patch '/cart/items/2' '{"quantity":1}' $custH }
+Check 'cart: remove item'           200 { DeleteRequest '/cart/items/1' $custH }
+Check 'cart: remove again'          404 { DeleteRequest '/cart/items/1' $custH }
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

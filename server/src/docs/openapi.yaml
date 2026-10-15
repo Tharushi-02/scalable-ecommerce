@@ -20,6 +20,8 @@ tags:
     description: Browse the catalogue (public) and manage products (admin)
   - name: Admin
     description: Admin-only tools
+  - name: Cart
+    description: The logged-in user's shopping cart
 
 paths:
   /health:
@@ -423,6 +425,168 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: User not found }
 
+  /api/v1/cart:
+    get:
+      tags: [Cart]
+      summary: View my cart
+      operationId: getCart
+      description: >
+        Prices, stock and availability are looked up live. Items with a problem
+        (unavailable, out of stock, not enough stock) are flagged with an issue,
+        excluded from the subtotal, and block checkout until fixed.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CartResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    delete:
+      tags: [Cart]
+      summary: Empty my cart
+      operationId: clearCart
+      description: Removes every item. Clearing an empty cart also succeeds.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The (now empty) cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CartResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/cart/items:
+    post:
+      tags: [Cart]
+      summary: Add a product to my cart
+      operationId: addCartItem
+      description: >
+        Adds to the existing quantity if the product is already in the cart
+        (2 in the cart + add 3 = 5). The total may not exceed the current stock or 99.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: integer, minimum: 1, example: 1 }
+                quantity: { type: integer, minimum: 1, maximum: 99, default: 1, example: 2 }
+      responses:
+        '200':
+          description: The updated cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CartResponse' }
+        '400':
+          description: Invalid input, or the total would exceed 99
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/Error'
+              examples:
+                validation:
+                  summary: Validation failed
+                  value:
+                    error: Validation failed
+                    details:
+                      - field: body.quantity
+                        message: Too small, expected number to be >=1
+                max:
+                  summary: More than 99 of one product
+                  value: { error: You can have at most 99 of a product in your cart }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not enough stock
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Only 40 left in stock }
+
+  /api/v1/cart/items/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        description: ID of a product in the cart
+        schema: { type: integer, minimum: 1, example: 1 }
+
+    patch:
+      tags: [Cart]
+      summary: Set the quantity of a cart item
+      operationId: setCartItemQuantity
+      description: >
+        Sets the quantity to exactly this number (it does not add).
+        To remove an item, use DELETE instead of quantity 0.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1, maximum: 99, example: 3 }
+      responses:
+        '200':
+          description: The updated cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CartResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: The product is not in your cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: This product is not in your cart }
+        '409':
+          description: Not enough stock, or the product is no longer available
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                stock:
+                  summary: Not enough stock
+                  value: { error: Only 40 left in stock }
+                unavailable:
+                  summary: Product deactivated
+                  value: { error: This product is no longer available. Remove it from your cart. }
+
+    delete:
+      tags: [Cart]
+      summary: Remove an item from my cart
+      operationId: removeCartItem
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The updated cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CartResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: The product is not in your cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: This product is not in your cart }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -517,6 +681,45 @@ components:
         user: { $ref: '#/components/schemas/User' }
         accessToken: { type: string, example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... }
         refreshToken: { type: string, example: 3a482afe042b6f79...e183e6f8df2f1f53 }
+
+    CartItem:
+      type: object
+      properties:
+        product:
+          type: object
+          properties:
+            id: { type: string, example: '1' }
+            name: { type: string, example: Handmade Ceramic Bike }
+            slug: { type: string, example: handmade-ceramic-bike-1 }
+            price: { type: string, example: '199.99', description: Current price (live) }
+            stock: { type: integer, example: 40 }
+            imageUrl: { type: string, format: uri, nullable: true }
+        quantity: { type: integer, example: 3 }
+        lineTotal: { type: string, example: '599.97', description: 'Price x quantity, exact' }
+        issue:
+          type: string
+          nullable: true
+          enum: [unavailable, out_of_stock, insufficient_stock]
+          description: null when the item can be bought
+        addedAt: { type: string, format: date-time }
+
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        summary:
+          type: object
+          properties:
+            itemCount: { type: integer, example: 3, description: Units that can be bought }
+            subtotal: { type: string, example: '599.97', description: Sum of items without issues }
+            canCheckout: { type: boolean, example: true }
+
+    CartResponse:
+      type: object
+      properties:
+        cart: { $ref: '#/components/schemas/Cart' }
 
   responses:
     BadRequest:
