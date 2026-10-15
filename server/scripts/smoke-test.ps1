@@ -123,5 +123,33 @@ Check 'order: get own'               200 { Get "/orders/$orderId" $custH }
 Check 'order: other user (admin)'    404 { Get "/orders/$orderId" $adminH }
 Check 'order: invalid id'            400 { Get '/orders/abc' $custH }
 Check 'order: not found'             404 { Get '/orders/99999999' $custH }
+Write-Host "`n--- Order lifecycle ---"
+$ship = '{"shipping":{"name":"T","line1":"1 St","city":"Kandy","postalCode":"20000","country":"LK"}}'
+function NewOrderId {
+  DeleteRequest '/cart' $custH | Out-Null
+  Post '/cart/items' '{"productId":10,"quantity":1}' $custH | Out-Null
+  ((Post '/orders' $ship $custH).Content | ConvertFrom-Json).order.id
+}
+
+$o1 = NewOrderId
+Check 'pay: declined card'           402 { Post "/orders/$o1/pay" '{"cardNumber":"4000000000000002"}' $custH }
+Check 'pay: invalid card'            400 { Post "/orders/$o1/pay" '{"cardNumber":"1234"}' $custH }
+Check 'pay: success'                 200 { Post "/orders/$o1/pay" '{"cardNumber":"4242424242424242"}' $custH }
+Check 'pay: already paid'            409 { Post "/orders/$o1/pay" '{"cardNumber":"4242424242424242"}' $custH }
+Check 'cancel: paid (refund)'        200 { Post "/orders/$o1/cancel" '{}' $custH }
+Check 'cancel: already cancelled'    409 { Post "/orders/$o1/cancel" '{}' $custH }
+
+$o2 = NewOrderId
+Check 'admin ship: unpaid'           409 { Patch "/admin/orders/$o2/status" '{"status":"shipped"}' $adminH }
+Post "/orders/$o2/pay" '{"cardNumber":"4242424242424242"}' $custH | Out-Null
+Check 'admin ship: as customer'      403 { Patch "/admin/orders/$o2/status" '{"status":"shipped"}' $custH }
+Check 'admin ship: bad status'       400 { Patch "/admin/orders/$o2/status" '{"status":"cancelled"}' $adminH }
+Check 'admin ship: paid order'       200 { Patch "/admin/orders/$o2/status" '{"status":"shipped"}' $adminH }
+Check 'admin deliver'                200 { Patch "/admin/orders/$o2/status" '{"status":"delivered"}' $adminH }
+Check 'cancel: delivered'            409 { Post "/orders/$o2/cancel" '{}' $custH }
+
+Check 'admin orders: list'           200 { Get '/admin/orders' $adminH }
+Check 'admin orders: filter'         200 { Get '/admin/orders?status=delivered' $adminH }
+Check 'admin orders: bad filter'     400 { Get '/admin/orders?status=lost' $adminH }
 
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

@@ -1,5 +1,6 @@
 import * as adminRepo from './admin.repository.js';
 import { findUserById } from '../auth/auth.repository.js';
+import * as orderService from '../orders/orders.service.js';
 import { HttpError } from '../../utils/httpError.js';
 
 export async function stats(req, res) {
@@ -21,4 +22,17 @@ export async function getUser(req, res) {
       createdAt: user.created_at,
     },
   });
+}
+
+export async function listOrders(req, res) {
+  const result = await orderService.listAllOrders(req.validated.query);
+  res.json(result);
+}
+
+export async function setOrderStatus(req, res) {
+  const order = await orderService.setOrderStatusAsAdmin(
+    req.validated.params.id,
+    req.validated.body.status,
+  );
+  res.json({ order });
 }

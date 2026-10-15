@@ -14,3 +14,17 @@ export async function getById(req, res) {
   const order = await orderService.getOrder(req.user.id, req.validated.params.id);
   res.json({ order });
 }
+
+export async function pay(req, res) {
+  const order = await orderService.payOrder(
+    req.user.id,
+    req.validated.params.id,
+    req.validated.body.cardNumber,
+  );
+  res.json({ order });
+}
+
+export async function cancel(req, res) {
+  const order = await orderService.cancelOrder(req.user.id, req.validated.params.id);
+  res.json({ order });
+}

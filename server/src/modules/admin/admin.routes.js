@@ -3,6 +3,10 @@ import { requireAuth } from '../../middleware/requireAuth.js';
 import { requireRole } from '../../middleware/requireRole.js';
 import { validate } from '../../middleware/validate.js';
 import { idParamSchema } from '../../utils/schemas.js';
+import {
+  adminListOrdersQuerySchema,
+  adminSetStatusSchema,
+} from '../orders/orders.schemas.js';
 import * as adminController from './admin.controller.js';
 
 const router = Router();
@@ -11,5 +15,12 @@ router.use(requireAuth, requireRole('admin'));
 
 router.get('/stats', adminController.stats);
 router.get('/users/:id', validate({ params: idParamSchema }), adminController.getUser);
+
+router.get('/orders', validate({ query: adminListOrdersQuerySchema }), adminController.listOrders);
+router.patch(
+  '/orders/:id/status',
+  validate({ params: idParamSchema, body: adminSetStatusSchema }),
+  adminController.setOrderStatus,
+);
 
 export default router;

@@ -1,5 +1,8 @@
 import * as repo from './orders.repository.js';
+import * as paymentsRepo from '../payments/payments.repository.js';
+import * as paymentProvider from '../payments/mockProvider.js';
 import { clearCart } from '../cart/cart.repository.js';
+import { canTransition } from './orderStatus.js';
 import { withTransaction } from '../../db/transaction.js';
 import { HttpError } from '../../utils/httpError.js';
 import { toCents, fromCents } from '../../utils/money.js';
@@ -25,6 +28,10 @@ function toOrder(order, items) {
       quantity: item.quantity,
       lineTotal: fromCents(toCents(item.unit_price) * item.quantity),
     })),
+    paidAt: order.paid_at,
+    shippedAt: order.shipped_at,
+    deliveredAt: order.delivered_at,
+    cancelledAt: order.cancelled_at,
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   };
@@ -47,6 +54,11 @@ function findProblems(rows) {
     }
   }
   return problems;
+}
+
+// A clear message for a move the state machine doesn't allow
+function transitionError(currentStatus, action) {
+  return new HttpError(409, `Cannot ${action} an order that is ${currentStatus}`);
 }
 
 export async function checkout(userId, shipping) {
@@ -105,7 +117,6 @@ export async function getOrder(userId, orderId) {
   return toOrder(order, items);
 }
 
-
 export async function listOrders(userId, { page, limit }) {
   const offset = (page - 1) * limit;
 
@@ -124,4 +135,144 @@ export async function listOrders(userId, { page, limit }) {
     })),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
+}
+
+export async function payOrder(userId, orderId, cardNumber) {
+  const result = await withTransaction(async (client) => {
+    // 1. Lock the order (a double-click waits here)
+    const order = await repo.lockOrder({ orderId, userId }, client);
+    if (!order) {
+      throw new HttpError(404, 'Order not found');
+    }
+
+    // 2. Only a pending order can be paid
+    if (!canTransition(order.status, 'paid')) {
+      throw transitionError(order.status, 'pay for');
+    }
+
+    // 3. Ask the payment provider
+    const charge = await paymentProvider.charge({ cardNumber, amount: order.total_amount });
+
+    // 4a. Declined: record the attempt, and let the transaction COMMIT it
+    if (!charge.ok) {
+      await paymentsRepo.insertPayment(
+        {
+          orderId,
+          kind: 'charge',
+          status: 'failed',
+          amount: order.total_amount,
+          cardLast4: charge.last4,
+          failureReason: charge.reason,
+        },
+        client,
+      );
+      return { declined: charge.reason };
+    }
+
+    // 4b. Approved: record the payment and move the order to 'paid'
+    await paymentsRepo.insertPayment(
+      {
+        orderId,
+        kind: 'charge',
+        status: 'succeeded',
+        amount: order.total_amount,
+        cardLast4: charge.last4,
+        providerRef: charge.providerRef,
+      },
+      client,
+    );
+    await repo.setOrderStatus(orderId, 'paid', client);
+    return { declined: null };
+  });
+
+  // Thrown OUTSIDE the transaction, so the failed attempt stays recorded
+  if (result.declined) {
+    throw new HttpError(402, `Payment failed: ${result.declined}`);
+  }
+
+  return getOrder(userId, orderId);
+}
+
+export async function cancelOrder(userId, orderId) {
+  await withTransaction(async (client) => {
+    // 1. Lock the order (no racing with a payment or a second cancel)
+    const order = await repo.lockOrder({ orderId, userId }, client);
+    if (!order) {
+      throw new HttpError(404, 'Order not found');
+    }
+
+    // 2. The state machine decides (shipped / delivered / cancelled → 409)
+    if (!canTransition(order.status, 'cancelled')) {
+      throw transitionError(order.status, 'cancel');
+    }
+
+    // 3. Paid orders get their money back first
+    if (order.status === 'paid') {
+      const refund = await paymentProvider.refund({ amount: order.total_amount });
+      if (!refund.ok) {
+        throw new HttpError(502, 'Refund failed, please try again');
+      }
+      await paymentsRepo.insertPayment(
+        {
+          orderId,
+          kind: 'refund',
+          status: 'succeeded',
+          amount: order.total_amount,
+          providerRef: refund.providerRef,
+        },
+        client,
+      );
+    }
+
+    // 4. Put the stock back (lock products in id order first)
+    await repo.lockOrderProducts(orderId, client);
+    await repo.restoreStock(orderId, client);
+
+    // 5. Mark it cancelled
+    await repo.setOrderStatus(orderId, 'cancelled', client);
+  });
+
+  return getOrder(userId, orderId);
+}
+
+
+// ---------- Admin ----------
+
+export async function listAllOrders({ page, limit, status }) {
+  const offset = (page - 1) * limit;
+
+  const [rows, total] = await Promise.all([
+    repo.listAllOrders({ status, limit, offset }),
+    repo.countAllOrders({ status }),
+  ]);
+
+  return {
+    orders: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      totalAmount: row.total_amount,
+      itemCount: row.item_count,
+      customerEmail: row.customer_email,
+      paidAt: row.paid_at,
+      createdAt: row.created_at,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+}
+
+const ACTION_NAMES = { shipped: 'ship', delivered: 'deliver' };
+
+export async function setOrderStatusAsAdmin(orderId, newStatus) {
+  await withTransaction(async (client) => {
+    const order = await repo.lockOrder({ orderId, userId: null }, client);
+    if (!order) {
+      throw new HttpError(404, 'Order not found');
+    }
+    if (!canTransition(order.status, newStatus)) {
+      throw transitionError(order.status, ACTION_NAMES[newStatus]);
+    }
+    await repo.setOrderStatus(orderId, newStatus, client);
+  });
+
+  return getOrder(null, orderId);
 }

@@ -15,3 +15,23 @@ export const listOrdersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
+
+export const paySchema = z.object({
+  cardNumber: z
+    .string()
+    .transform((value) => value.replace(/\s/g, ''))
+    .pipe(z.string().regex(/^\d{16}$/, 'Card number must be 16 digits')),
+});
+
+const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'];
+
+export const adminListOrdersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(ORDER_STATUSES).optional(),
+});
+
+// Only the moves that are pure status changes
+export const adminSetStatusSchema = z.object({
+  status: z.enum(['shipped', 'delivered']),
+});

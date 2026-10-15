@@ -702,6 +702,157 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: Order not found }
 
+  /api/v1/orders/{id}/pay:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags: [Orders]
+      summary: Pay for a pending order (mock payment)
+      operationId: payOrder
+      description: >
+        Test cards: any 16 digits succeed; ending in 0002 is declined; ending in 9995 has
+        insufficient funds. The order row is locked during payment, so a double-click can
+        never charge twice. Failed attempts are recorded. Only the last 4 digits are stored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cardNumber]
+              properties:
+                cardNumber: { type: string, example: 4242 4242 4242 4242, description: 16 digits (spaces allowed) }
+      responses:
+        '200':
+          description: Paid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: The payment was declined (the attempt is recorded)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: 'Payment failed: Card declined' }
+        '404':
+          description: No such order for this user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Order not found }
+        '409': { $ref: '#/components/responses/TransitionConflict' }
+
+  /api/v1/orders/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags: [Orders]
+      summary: Cancel a pending or paid order
+      operationId: cancelOrder
+      description: >
+        In one transaction: refunds paid orders, puts every item's quantity back into stock
+        (locking products in id order), and sets the status to cancelled.
+        Shipped and delivered orders cannot be cancelled.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No such order for this user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Order not found }
+        '409': { $ref: '#/components/responses/TransitionConflict' }
+        '502':
+          description: The payment provider failed to refund (nothing was changed)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: 'Refund failed, please try again' }
+
+  /api/v1/admin/orders:
+    get:
+      tags: [Admin]
+      summary: List every customer's orders (admin)
+      operationId: listAllOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          description: Only orders with this status, for example paid (waiting to ship)
+          schema: { type: string, enum: [pending, paid, shipped, delivered, cancelled] }
+      responses:
+        '200':
+          description: One page of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminOrderSummary' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/orders/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    patch:
+      tags: [Admin]
+      summary: Ship or deliver an order (admin)
+      operationId: setOrderStatus
+      description: >
+        Allowed moves: paid to shipped, shipped to delivered. Paying and cancelling
+        have their own endpoints because they move money and stock.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [shipped, delivered], example: shipped }
+      responses:
+        '200':
+          description: The updated order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Order not found }
+        '409': { $ref: '#/components/responses/TransitionConflict' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -866,6 +1017,10 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/OrderItem' }
+        paidAt: { type: string, format: date-time, nullable: true }
+        shippedAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -893,7 +1048,26 @@ components:
               requested: { type: integer, example: 5 }
               available: { type: integer, example: 2 }
 
+    AdminOrderSummary:
+      allOf:
+        - $ref: '#/components/schemas/OrderSummary'
+        - type: object
+          properties:
+            customerEmail: { type: string, format: email, example: customer1@example.com }
+            paidAt: { type: string, format: date-time, nullable: true }
+
+    OrderResponse:
+      type: object
+      properties:
+        order: { $ref: '#/components/schemas/Order' }
+
   responses:
+    TransitionConflict:
+      description: The order's current status doesn't allow this action
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Cannot cancel an order that is shipped }
     BadRequest:
       description: Invalid input
       content:
