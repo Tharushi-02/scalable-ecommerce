@@ -12,7 +12,7 @@ import productRoutes from './modules/products/products.routes.js';
 import { openapiSpec, swaggerServe, swaggerSetup } from './docs/swagger.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import orderRoutes from './modules/orders/orders.routes.js';
-
+import categoryRoutes from './modules/categories/categories.routes.js';
 
 const app = express();
 
@@ -39,6 +39,9 @@ app.use('/api/v1/cart', cartRoutes);
 
 app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/orders', orderRoutes);
+
+app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

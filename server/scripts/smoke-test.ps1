@@ -151,5 +151,6 @@ Check 'cancel: delivered'            409 { Post "/orders/$o2/cancel" '{}' $custH
 Check 'admin orders: list'           200 { Get '/admin/orders' $adminH }
 Check 'admin orders: filter'         200 { Get '/admin/orders?status=delivered' $adminH }
 Check 'admin orders: bad filter'     400 { Get '/admin/orders?status=lost' $adminH }
+Check 'categories: list'            200 { Get '/categories' }
 
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

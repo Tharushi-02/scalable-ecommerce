@@ -18,6 +18,8 @@ tags:
     description: Register, log in, refresh tokens, log out
   - name: Products
     description: Browse the catalogue (public) and manage products (admin)
+  - name: Categories
+    description: Product categories (public)
   - name: Admin
     description: Admin-only tools
   - name: Cart
@@ -289,6 +291,27 @@ paths:
         '400': { $ref: '#/components/responses/ProductBadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/categories:
+    get:
+      tags: [Categories]
+      summary: List all categories (A to Z)
+      operationId: listCategories
+      security: []
+      description: Used by the shop's category filter. Pass a slug to GET /api/v1/products?category=...
+      responses:
+        '200':
+          description: Every category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+        '500':
+          description: The database is unreachable
 
   /api/v1/products/{id}:
     parameters:
