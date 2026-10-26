@@ -1,32 +1,72 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { api } from '../api/client.js';
+import Filters from '../components/Filters.jsx';
+import Pagination from '../components/Pagination.jsx';
+import ProductCard from '../components/ProductCard.jsx';
+
+const PAGE_SIZE = 12;
 
 export default function HomePage() {
-  const [products, setProducts] = useState([]);
+  const [searchParams] = useSearchParams();
+  const query = searchParams.toString();
+
+  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api('/products?limit=8', { auth: false })
-      .then((data) => setProducts(data.products))
-      .catch((err) => setError(err.message));
-  }, []);
+    let ignore = false;
+
+    const params = new URLSearchParams(query);
+    params.set('limit', String(PAGE_SIZE));
+
+    api(`/products?${params}`, { auth: false })
+      .then((data) => {
+        if (ignore) return;
+        setResult(data);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!ignore) setError(err.message);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [query]);
+
+  const pagination = result?.pagination;
 
   return (
     <section>
       <h1>Shop</h1>
-      <p className="muted">Newest products (the full catalogue with filters comes on Day 12)</p>
+      <Filters />
 
-      {error && <p className="error">Could not load products: {error}</p>}
+      {error && <p className="error">{error}</p>}
+      {!result && !error && <p className="muted">Loading…</p>}
 
-      <ul className="product-list">
-        {products.map((p) => (
-          <li key={p.id}>
-            <Link to={`/products/${p.id}`}>{p.name}</Link>
-            <span>Rs. {p.price}</span>
-          </li>
-        ))}
-      </ul>
+      {result && (
+        <>
+          <p className="muted">
+            {pagination.total} products
+            {pagination.totalPages > 1 && ` · page ${pagination.page} of ${pagination.totalPages}`}
+          </p>
+
+          {result.products.length > 0 ? (
+            <div className="product-grid">
+              {result.products.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          ) : pagination.total > 0 ? (
+            <p className="muted">This page doesn't exist. Use the buttons below to go back.</p>
+          ) : (
+            <p className="muted">No products match your filters.</p>
+          )}
+
+          <Pagination page={pagination.page} totalPages={pagination.totalPages} />
+        </>
+      )}
     </section>
   );
 }

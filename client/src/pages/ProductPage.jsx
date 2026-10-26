@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { api } from '../api/client.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useCartStore } from '../stores/cartStore.js';
 
-// A new product id = a brand-new component with fresh state (no manual resets)
+// A new product id = a brand-new component with fresh state
 export default function ProductPage() {
   const { id } = useParams();
   return <ProductDetails key={id} id={id} />;
@@ -12,16 +12,20 @@ export default function ProductPage() {
 
 function ProductDetails({ id }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTo = location.state?.backTo ?? '/';
+
   const status = useAuthStore((s) => s.status);
   const addItem = useCartStore((s) => s.addItem);
 
   const [product, setProduct] = useState(null);
   const [error, setError] = useState(null);
+  const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text }
 
   useEffect(() => {
-    let ignore = false; // set when this component goes away
+    let ignore = false;
     api(`/products/${id}`, { auth: false })
       .then((data) => {
         if (!ignore) setProduct(data.product);
@@ -35,7 +39,6 @@ function ProductDetails({ id }) {
   }, [id]);
 
   async function handleAddToCart() {
-    // Guests log in first, then come back to this product
     if (status !== 'authenticated') {
       navigate('/login', { state: { from: `/products/${id}` } });
       return;
@@ -44,8 +47,11 @@ function ProductDetails({ id }) {
     setAdding(true);
     setMessage(null);
     try {
-      await addItem(product.id, 1);
-      setMessage({ type: 'success', text: 'Added to your cart.' });
+      await addItem(product.id, quantity);
+      setMessage({
+        type: 'success',
+        text: quantity === 1 ? 'Added to your cart.' : `Added ${quantity} to your cart.`,
+      });
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -57,7 +63,7 @@ function ProductDetails({ id }) {
     return (
       <section>
         <p className="error">{error}</p>
-        <Link to="/">← Back to the shop</Link>
+        <Link to={backTo}>← Back to the shop</Link>
       </section>
     );
   }
@@ -65,26 +71,56 @@ function ProductDetails({ id }) {
   if (!product) return <p className="muted">Loading…</p>;
 
   const outOfStock = product.stock === 0;
+  const maxQuantity = Math.min(product.stock, 99); // same 99 cap as the API
 
   return (
     <section>
-      <Link to="/">← Back to the shop</Link>
-      <h1>{product.name}</h1>
-      <p className="muted">{product.category.name}</p>
-      <p className="price">Rs. {product.price}</p>
-      <p>{product.description}</p>
-      <p className="muted">{outOfStock ? 'Out of stock' : `${product.stock} in stock`}</p>
+      <Link to={backTo}>← Back to the shop</Link>
 
-      <button
-        type="button"
-        className="button"
-        onClick={handleAddToCart}
-        disabled={adding || outOfStock}
-      >
-        {outOfStock ? 'Out of stock' : adding ? 'Adding…' : 'Add to cart'}
-      </button>
+      <div className="product-detail">
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="product-detail-image" />
+        ) : (
+          <div className="img-placeholder product-detail-image" />
+        )}
 
-      {message && <p className={message.type}>{message.text}</p>}
+        <div className="product-detail-info">
+          <Link to={`/?category=${product.category.slug}`} className="muted">
+            {product.category.name}
+          </Link>
+          <h1>{product.name}</h1>
+          <p className="price">Rs. {product.price}</p>
+          <p>{product.description}</p>
+          <p className={outOfStock ? 'error' : 'muted'}>
+            {outOfStock ? 'Out of stock' : `${product.stock} in stock`}
+          </p>
+
+          {!outOfStock && (
+            <div className="add-to-cart">
+              <label className="quantity">
+                <span>Qty</span>
+                <select
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  disabled={adding}
+                >
+                  {Array.from({ length: maxQuantity }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button type="button" className="button" onClick={handleAddToCart} disabled={adding}>
+                {adding ? 'Adding…' : 'Add to cart'}
+              </button>
+            </div>
+          )}
+
+          {message && <p className={message.type}>{message.text}</p>}
+        </div>
+      </div>
     </section>
   );
 }
