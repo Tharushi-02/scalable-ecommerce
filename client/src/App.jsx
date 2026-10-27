@@ -9,6 +9,9 @@ import CartPage from './pages/CartPage.jsx';
 import OrdersPage from './pages/OrdersPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import CheckoutPage from './pages/CheckoutPage.jsx';
+import PayPage from './pages/PayPage.jsx';
+
 
 export default function App() {
   const init = useAuthStore((s) => s.init);
@@ -28,7 +31,9 @@ export default function App() {
         {/* Logged-in users only */}
         <Route element={<ProtectedRoute />}>
           <Route path="cart" element={<CartPage />} />
+          <Route path="checkout" element={<CheckoutPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/:id/pay" element={<PayPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
