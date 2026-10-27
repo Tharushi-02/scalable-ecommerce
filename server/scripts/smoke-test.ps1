@@ -152,5 +152,21 @@ Check 'admin orders: list'           200 { Get '/admin/orders' $adminH }
 Check 'admin orders: filter'         200 { Get '/admin/orders?status=delivered' $adminH }
 Check 'admin orders: bad filter'     400 { Get '/admin/orders?status=lost' $adminH }
 Check 'categories: list'            200 { Get '/categories' }
+Write-Host "`n--- Cache ---"
+$health = Invoke-RestMethod -Uri 'http://localhost:4000/health'
+if ($health.cache -eq 'connected') {
+  Write-Host "PASS  redis connected" -ForegroundColor Green; $script:pass++
+} else {
+  Write-Host "FAIL  redis connected (got '$($health.cache)')" -ForegroundColor Red; $script:fail++
+}
+
+$cacheUrl = "$api/products?page=4&limit=7"
+Invoke-WebRequest -UseBasicParsing $cacheUrl | Out-Null          # first call fills the cache
+$xCache = (Invoke-WebRequest -UseBasicParsing $cacheUrl).Headers['X-Cache']
+if ($xCache -eq 'HIT') {
+  Write-Host "PASS  product list cached (HIT)" -ForegroundColor Green; $script:pass++
+} else {
+  Write-Host "FAIL  product list cached (got '$xCache')" -ForegroundColor Red; $script:fail++
+}
 
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

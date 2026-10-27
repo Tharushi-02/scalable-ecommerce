@@ -2,6 +2,7 @@ import * as repo from './products.repository.js';
 import { HttpError } from '../../utils/httpError.js';
 import crypto from 'node:crypto';
 import { slugify } from '../../utils/slugify.js';
+import { getOrSet } from '../../utils/cache.js';
 
 
 const UNIQUE_VIOLATION = '23505';
@@ -107,4 +108,27 @@ export async function deleteProduct(id) {
   if (!deleted) {
     throw new HttpError(404, 'Product not found');
   }
+}
+
+// ---------- Cached versions for the public shop ----------
+
+const CACHE_TTL_SECONDS = 60;
+
+// Same filters in any order → same key, e.g. "inStock=true&page=1&q=chair&sort=price_asc"
+function queryKey(query) {
+  return Object.keys(query)
+    .filter((key) => query[key] !== undefined)
+    .sort()
+    .map((key) => `${key}=${query[key]}`)
+    .join('&');
+}
+
+export function listProductsCached(query) {
+  return getOrSet(`products:list:${queryKey(query)}`, CACHE_TTL_SECONDS, () =>
+    listProducts(query),
+  );
+}
+
+export function getProductCached(id) {
+  return getOrSet(`products:item:${id}`, CACHE_TTL_SECONDS, () => getProduct(id));
 }

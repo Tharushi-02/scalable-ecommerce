@@ -1,13 +1,15 @@
 import * as productService from './products.service.js';
 
 export async function getById(req, res) {
-  const product = await productService.getProduct(req.validated.params.id);
+  const { value: product, hit } = await productService.getProductCached(req.validated.params.id);
+  res.set('X-Cache', hit ? 'HIT' : 'MISS');
   res.json({ product });
 }
 
 export async function list(req, res) {
-  const result = await productService.listProducts(req.validated.query);
-  res.json(result);
+  const { value, hit } = await productService.listProductsCached(req.validated.query);
+  res.set('X-Cache', hit ? 'HIT' : 'MISS');
+  res.json(value);
 }
 
 export async function create(req, res) {
