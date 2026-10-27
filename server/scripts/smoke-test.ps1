@@ -169,4 +169,18 @@ if ($xCache -eq 'HIT') {
   Write-Host "FAIL  product list cached (got '$xCache')" -ForegroundColor Red; $script:fail++
 }
 
+# Invalidation: cache a product, change its price as admin, the next read must be fresh
+$probe = "$api/products/3"
+Invoke-WebRequest -UseBasicParsing $probe | Out-Null                       # now cached
+$origPrice = ((Invoke-WebRequest -UseBasicParsing $probe).Content | ConvertFrom-Json).product.price
+Patch '/products/3' '{"price": 7.77}' $adminH | Out-Null
+$after = Invoke-WebRequest -UseBasicParsing $probe
+$afterPrice = ($after.Content | ConvertFrom-Json).product.price
+if ($afterPrice -eq '7.77' -and $after.Headers['X-Cache'] -eq 'MISS') {
+  Write-Host "PASS  cache cleared after admin update" -ForegroundColor Green; $script:pass++
+} else {
+  Write-Host "FAIL  cache cleared after admin update (price $afterPrice, $($after.Headers['X-Cache']))" -ForegroundColor Red; $script:fail++
+}
+Patch '/products/3' (@{ price = $origPrice } | ConvertTo-Json) $adminH | Out-Null   # put it back
+
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

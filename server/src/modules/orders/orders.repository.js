@@ -163,15 +163,18 @@ export async function lockOrderProducts(orderId, db) {
   );
 }
 
-// Puts every item's quantity back into stock (relative update)
+// Puts every item's quantity back into stock (relative update).
+// Returns each product's new stock and how much was added back.
 export async function restoreStock(orderId, db) {
-  await db.query(
+  const { rows } = await db.query(
     `UPDATE products p
         SET stock = p.stock + oi.quantity, updated_at = NOW()
        FROM order_items oi
-      WHERE oi.order_id = $1 AND p.id = oi.product_id`,
+      WHERE oi.order_id = $1 AND p.id = oi.product_id
+      RETURNING p.id AS product_id, p.stock, oi.quantity`,
     [orderId],
   );
+  return rows;
 }
 
 // Admin: every customer's orders, optionally filtered by status

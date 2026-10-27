@@ -23,3 +23,15 @@
 
 Notes: in a 10-second run every request after the first is a cache hit, so this is the best case
 for popular pages. Real traffic mixes many filter combinations, so the overall hit rate is lower.
+
+
+## Day 16: cache invalidation
+
+| Version | p50 | p99 | Requests/sec (GET /products) |
+|---|---|---|---|
+| Day 15 (cache, no invalidation) | 9 ms | 23 ms | 4,767 |
+| Day 16 (versioned keys, 2 Redis calls per request) | 14 ms | 33 ms | 3,126 |
+| Day 16 (+ version remembered in memory for 1 s) | 8 ms | 17 ms | 5,487 |
+
+Lesson: the version lookup doubled the Redis round trips (-34%). Remembering it for 1 second
+removed almost all of them, at the cost of up to 1 s of staleness on other API instances.

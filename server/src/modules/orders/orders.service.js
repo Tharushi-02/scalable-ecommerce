@@ -2,6 +2,7 @@ import * as repo from './orders.repository.js';
 import * as paymentsRepo from '../payments/payments.repository.js';
 import * as paymentProvider from '../payments/mockProvider.js';
 import { clearCart } from '../cart/cart.repository.js';
+import { invalidateProducts } from '../products/products.cache.js';
 import { canTransition } from './orderStatus.js';
 import { withTransaction } from '../../db/transaction.js';
 import { HttpError } from '../../utils/httpError.js';
@@ -62,7 +63,7 @@ function transitionError(currentStatus, action) {
 }
 
 export async function checkout(userId, shipping) {
-  const orderId = await withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     // 1. Lock the cart and its products (sorted by product id)
     const rows = await repo.lockCartForCheckout(userId, client);
     if (rows.length === 0) {
@@ -102,10 +103,17 @@ export async function checkout(userId, shipping) {
     // 6. Empty the cart
     await clearCart(userId, client);
 
-    return newOrderId;
+    return {
+      orderId: newOrderId,
+      productIds: rows.map((row) => row.product_id),
+      soldOut: rows.some((row) => row.stock - row.quantity === 0),
+    };
   });
 
-  return getOrder(userId, orderId);
+  // Committed: now refresh the cached product pages (and lists if something sold out)
+  await invalidateProducts(result.productIds, { lists: result.soldOut });
+
+  return getOrder(userId, result.orderId);
 }
 
 export async function getOrder(userId, orderId) {
@@ -194,7 +202,7 @@ export async function payOrder(userId, orderId, cardNumber) {
 }
 
 export async function cancelOrder(userId, orderId) {
-  await withTransaction(async (client) => {
+  const restocked = await withTransaction(async (client) => {
     // 1. Lock the order (no racing with a payment or a second cancel)
     const order = await repo.lockOrder({ orderId, userId }, client);
     if (!order) {
@@ -226,15 +234,22 @@ export async function cancelOrder(userId, orderId) {
 
     // 4. Put the stock back (lock products in id order first)
     await repo.lockOrderProducts(orderId, client);
-    await repo.restoreStock(orderId, client);
+    const rows = await repo.restoreStock(orderId, client);
 
     // 5. Mark it cancelled
     await repo.setOrderStatus(orderId, 'cancelled', client);
+
+    return rows;
   });
+
+  // Committed: refresh the product pages; lists only if something came back from 0
+  await invalidateProducts(
+    restocked.map((row) => row.product_id),
+    { lists: restocked.some((row) => row.stock - row.quantity === 0) },
+  );
 
   return getOrder(userId, orderId);
 }
-
 
 // ---------- Admin ----------
 
