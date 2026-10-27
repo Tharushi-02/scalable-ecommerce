@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useLocation } from 'react-router';
+import { Link, Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../stores/authStore.js';
 
 export default function LoginPage() {
@@ -64,6 +64,13 @@ export default function LoginPage() {
           {submitting ? 'Logging in…' : 'Log in'}
         </button>
       </form>
+
+      <p className="small">
+        New here?{' '}
+        <Link to="/register" state={{ from }}>
+          Create an account
+        </Link>
+      </p>
 
       <p className="muted small">
         Demo accounts: customer1@example.com or admin@example.com, password Password123!

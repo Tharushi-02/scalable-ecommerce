@@ -13,7 +13,7 @@ export const useAuthStore = create((set) => ({
       return;
     }
     try {
-      const { user } = await api('/auth/me'); // 401 → automatic refresh → retry
+      const { user } = await api('/auth/me');
       set({ user, status: 'authenticated' });
     } catch {
       set({ user: null, status: 'guest' });
@@ -30,19 +30,28 @@ export const useAuthStore = create((set) => ({
     set({ user: data.user, status: 'authenticated' });
   },
 
+  // Creates the account; the API logs the new user in straight away
+  async register(name, email, password) {
+    const data = await api('/auth/register', {
+      method: 'POST',
+      auth: false,
+      body: { name, email, password },
+    });
+    tokens.set(data.accessToken, data.refreshToken);
+    set({ user: data.user, status: 'authenticated' });
+  },
+
   async logout() {
     const refreshToken = tokens.getRefresh();
     if (refreshToken) {
-      // Revoke it on the server; ignore network errors, we log out locally anyway
       await api('/auth/logout', { method: 'POST', auth: false, body: { refreshToken } }).catch(
         () => {},
       );
     }
-    tokens.clear(); // triggers the onClear listener below
+    tokens.clear();
   },
 }));
 
-// Whenever the session ends (logout, or a failed refresh), reset the user
 tokens.onClear(() => {
   useAuthStore.setState({ user: null, status: 'guest' });
 });

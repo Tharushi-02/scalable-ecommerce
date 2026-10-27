@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import CheckoutPage from './pages/CheckoutPage.jsx';
 import PayPage from './pages/PayPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
+import OrderDetailPage from './pages/OrderDetailPage.jsx';
 
 
 export default function App() {
@@ -27,12 +29,14 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="products/:id" element={<ProductPage />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="register" element={<RegisterPage />} />
 
         {/* Logged-in users only */}
         <Route element={<ProtectedRoute />}>
           <Route path="cart" element={<CartPage />} />
           <Route path="checkout" element={<CheckoutPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/:id" element={<OrderDetailPage />} />
           <Route path="orders/:id/pay" element={<PayPage />} />
         </Route>
 

@@ -538,3 +538,126 @@ a.button {
   display: inline-block;
   text-decoration: none;
 }
+
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #e3e6ea;
+  border-radius: 8px;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 80px 120px 150px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e3e6ea;
+}
+
+.order-row:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 760px) {
+  .order-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.order-id {
+  font-weight: 600;
+}
+
+.order-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  justify-self: start;
+}
+
+.status-pending {
+  background: #fff8c5;
+  color: #7d4e00;
+}
+
+.status-paid {
+  background: #ddf4ff;
+  color: #0550ae;
+}
+
+.status-shipped {
+  background: #fbefff;
+  color: #8250df;
+}
+
+.status-delivered {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+
+.status-cancelled {
+  background: #eaeef2;
+  color: #57606a;
+}
+
+.card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+}
+
+.card h2:not(:first-child) {
+  margin-top: 24px;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0 6px 22px;
+  position: relative;
+  color: #9aa4b2;
+}
+
+/* The dot: empty = still to come, filled = done */
+.timeline li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #d0d7de;
+  background: #ffffff;
+}
+
+.timeline li.done {
+  color: #1f2328;
+}
+
+.timeline li.done::before {
+  border-color: #2f6feb;
+  background: #2f6feb;
+}
+
+.link-button.danger {
+  color: #cf222e;
+  align-self: flex-start;
+}
