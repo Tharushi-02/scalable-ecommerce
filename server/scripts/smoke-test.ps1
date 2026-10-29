@@ -1,4 +1,4 @@
-$api = 'http://localhost:4000/api/v1'
+﻿$api = 'http://localhost:4000/api/v1'
 $pass = 0; $fail = 0
 
 function Check($name, $expected, [scriptblock]$call) {
@@ -64,7 +64,7 @@ Check 'admin stats: admin'        200 { Get '/admin/stats' $adminH }
 Write-Host "`n--- Bad requests ---"
 Check 'user id: abc'              400 { Get '/admin/users/abc' $adminH }
 Check 'user id: negative'         400 { Get '/admin/users/-5' $adminH }
-Check 'user id: not found'        404 { Get '/admin/users/99999' $adminH }
+Check 'user id: not found'        404 { Get '/admin/users/999999999' $adminH }
 Check 'user id: valid'            200 { Get '/admin/users/2' $adminH }
 Check 'malformed JSON'            400 { Post '/auth/login' '{"email": "a@b.com",' }
 Check 'body too large'            413 { Post '/auth/login' (@{ email = 'a@b.com'; password = ('x' * 2MB) } | ConvertTo-Json) }
@@ -80,7 +80,7 @@ Check 'list: bad sort'              400 { Get '/products?sort=random' }
 Check 'list: minPrice > maxPrice'   400 { Get '/products?minPrice=500&maxPrice=100' }
 Check 'get: valid id'               200 { Get '/products/1' }
 Check 'get: invalid id'             400 { Get '/products/abc' }
-Check 'get: not found'              404 { Get '/products/99999' }
+Check 'get: not found'              404 { Get '/products/999999999' }
 
 Write-Host "`n--- Products: admin ---"
 $lamp = '{"name":"Smoke Test Lamp","price":19.99,"stock":5,"categoryId":4}'
@@ -104,7 +104,7 @@ Check 'cart: view empty'            200 { Get '/cart' $custH }
 Check 'cart: add item'              200 { Post '/cart/items' '{"productId":1,"quantity":1}' $custH }
 Check 'cart: add same again'        200 { Post '/cart/items' '{"productId":1}' $custH }
 Check 'cart: add over 99'           400 { Post '/cart/items' '{"productId":1,"quantity":99}' $custH }
-Check 'cart: add unknown product'   404 { Post '/cart/items' '{"productId":99999}' $custH }
+Check 'cart: add unknown product'   404 { Post '/cart/items' '{"productId":999999999}' $custH }
 Check 'cart: add invalid id'        400 { Post '/cart/items' '{"productId":"abc"}' $custH }
 Check 'cart: set quantity'          200 { Patch '/cart/items/1' '{"quantity":1}' $custH }
 Check 'cart: set above stock'       409 { Patch '/cart/items/1' '{"quantity":99}' $custH }
