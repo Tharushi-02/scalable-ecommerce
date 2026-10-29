@@ -9,6 +9,7 @@ const schema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+    RATE_LIMIT_API_PER_MIN: z.coerce.number().int().min(0).default(300),
 });
 
 const parsed = schema.safeParse(process.env);

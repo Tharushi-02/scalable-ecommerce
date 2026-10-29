@@ -183,4 +183,25 @@ if ($afterPrice -eq '7.77' -and $after.Headers['X-Cache'] -eq 'MISS') {
 }
 Patch '/products/3' (@{ price = $origPrice } | ConvertTo-Json) $adminH | Out-Null   # put it back
 
+Write-Host "`n--- Rate limits ---"
+# 6 wrong passwords for one (made-up) account: the 6th must be blocked
+$probe = '{"email":"ratelimit-probe@example.com","password":"wrong"}'
+$last = 0
+for ($i = 1; $i -le 6; $i++) {
+  try { Post '/auth/login' $probe | Out-Null; $last = 200 }
+  catch { $last = [int]$_.Exception.Response.StatusCode }
+}
+if ($last -eq 429) {
+  Write-Host "PASS  login blocked after 5 attempts (429)" -ForegroundColor Green; $script:pass++
+} else {
+  Write-Host "FAIL  login blocked after 5 attempts (got $last)" -ForegroundColor Red; $script:fail++
+}
+
+$r = Get '/categories'
+if ($r.Headers['RateLimit-Limit']) {
+  Write-Host "PASS  rate limit headers present" -ForegroundColor Green; $script:pass++
+} else {
+  Write-Host "FAIL  rate limit headers present" -ForegroundColor Red; $script:fail++
+}
+
 Write-Host "`n$pass passed, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

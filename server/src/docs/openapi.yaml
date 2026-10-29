@@ -7,6 +7,10 @@ info:
 
     Public endpoints need no login. Protected endpoints need an access token:
     log in, then click **Authorize** and paste the `accessToken`.
+
+    **Rate limits** (Redis, per minute unless stated): every `/api/v1` request 300 per IP;
+    login 5 per IP + email and 20 per IP; register 20 per hour per IP; checkout and pay
+    10 per user. Over the limit → `429` with a `Retry-After` header.
 servers:
   - url: http://localhost:4000
     description: Local development
@@ -81,6 +85,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: Email is already registered }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/auth/login:
     post:
@@ -114,6 +119,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: Invalid email or password }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/auth/refresh:
     post:
@@ -667,6 +673,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CheckoutConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
     get:
       tags: [Orders]
@@ -768,6 +775,7 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: Order not found }
         '409': { $ref: '#/components/responses/TransitionConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/orders/{id}/cancel:
     parameters:
@@ -1085,6 +1093,22 @@ components:
         order: { $ref: '#/components/schemas/Order' }
 
   responses:
+    TooManyRequests:
+      description: Rate limit exceeded. Wait for the number of seconds in Retry-After.
+      headers:
+        Retry-After:
+          description: Seconds until you can try again
+          schema: { type: integer, example: 42 }
+        RateLimit-Limit:
+          description: Requests allowed in the current window
+          schema: { type: integer, example: 5 }
+        RateLimit-Remaining:
+          description: Requests left in the current window
+          schema: { type: integer, example: 0 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Too many requests. Please try again in 42 seconds. }
     TransitionConflict:
       description: The order's current status doesn't allow this action
       content:
