@@ -14,9 +14,17 @@ import productRoutes from './modules/products/products.routes.js';
 import categoryRoutes from './modules/categories/categories.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import orderRoutes from './modules/orders/orders.routes.js';
+import os from 'node:os';
 
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
+
+// Which server copy answered (the container ID inside Docker). Useful with replicas.
+const instanceId = os.hostname();
+app.use((req, res, next) => {
+  res.setHeader('X-Instance', instanceId);
+  next();
+});
 
 // 1. Security headers, CORS, JSON body, request logging
 app.use(helmet());

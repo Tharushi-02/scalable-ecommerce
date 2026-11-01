@@ -46,6 +46,8 @@ services:
     build: ./server
     image: ecom-server:latest
     restart: unless-stopped
+    deploy:
+      replicas: 3
     environment:
       RATE_LIMIT_API_PER_MIN: ${RATE_LIMIT_API_PER_MIN:-300}
       NODE_ENV: production

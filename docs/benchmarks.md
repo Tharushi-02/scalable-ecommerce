@@ -107,3 +107,23 @@ Known limits: COUNT(*) (~18 ms) and deep OFFSET pages (~66 ms). The fix is keyse
 gzip on assets: JS 290 KB -> 90 KB, CSS 7.4 KB -> 2.0 KB, products JSON 8.1 KB -> 2.0 KB.
 Caching: /assets/* = 1 year immutable, index.html = no-cache (304 on repeat).
 Not directly comparable with Day 16 (Express on host, logging off).
+
+
+
+## Day 22: horizontal scaling (Nginx round-robin, Docker Desktop on Windows, 12 CPUs)
+
+| Replicas (autocannon -c 100 -d 15 -w 4, /products) | Req/s | p50 | p99 |
+|---|---|---|---|
+| 1 | 2,547 | 37 ms | 65 ms |
+| 3 | 3,757 | 24 ms | 66 ms |
+
+~1.5x throughput, p50 -35%. Not 3x: with 1 replica the single Node core was the limit; with 3,
+the bottleneck moved to the shared host (Docker Desktop's Windows→VM port forwarding,
+Nginx, Redis and the load generator all on the same 12 cores).
+Failover: killed 1 of 3 replicas under ~3,400 req/s → 0 non-2xx responses (Nginx retried
+in-flight GETs on healthy replicas, then dropped the dead one via DNS re-resolve).
+
+| 3 (load generator inside Docker's network, no Windows→VM hop) | 5,721 | 15 ms | 41 ms |
+
+The Windows→VM port forwarding cost ~35% of throughput. Measured from inside Docker,
+3 replicas reach ~2.2x of 1 replica (from Windows). Real Linux servers don't have that hop.
