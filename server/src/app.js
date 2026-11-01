@@ -16,6 +16,7 @@ import cartRoutes from './modules/cart/cart.routes.js';
 import orderRoutes from './modules/orders/orders.routes.js';
 
 const app = express();
+app.set('trust proxy', env.TRUST_PROXY);
 
 // 1. Security headers, CORS, JSON body, request logging
 app.use(helmet());

@@ -83,3 +83,27 @@ Searches shorter than 3 letters can't use trigrams.
 
 Cache off, the plain list is slowest: COUNT(*) over all 201k rows on every request is now the bottleneck.
 Known limits: COUNT(*) (~18 ms) and deep OFFSET pages (~66 ms). The fix is keyset (cursor) pagination.
+
+
+
+## Day 21: gzip in Nginx (comp level 5)
+
+| Response | Plain | gzip | Saved |
+|---|---|---|---|
+| JS bundle | 290 KB | 90 KB | 69% |
+| CSS | 7.4 KB | 2.0 KB | 73% |
+| /products?limit=20 (JSON) | 8.1 KB | 2.0 KB | 76% |
+
+
+## Day 21: through Nginx (Docker Compose, Docker Desktop on Windows, production mode)
+
+| Test (autocannon -c 50 -d 10) | Req/s | p50 | p99 | Notes |
+|---|---|---|---|---|
+| API via Nginx, new upstream connection per request | 1,605 | 26 ms | 89 ms | failed after ~20 s: ephemeral ports exhausted (TIME_WAIT), error 99 |
+| API via Nginx, upstream keepalive pool | 2,953 | 16 ms | 31 ms | 0 errors, ~1.8x req/s, ~3x lower p99 |
+| same + Accept-Encoding: gzip | 2,737 | 17 ms | 27 ms | 8.3 MB/s vs 26.9 MB/s (-69% bandwidth) |
+| / static (Nginx only, no Node) | 12,695 | 7 ms | 13 ms | ~4x the API |
+
+gzip on assets: JS 290 KB -> 90 KB, CSS 7.4 KB -> 2.0 KB, products JSON 8.1 KB -> 2.0 KB.
+Caching: /assets/* = 1 year immutable, index.html = no-cache (304 on repeat).
+Not directly comparable with Day 16 (Express on host, logging off).
