@@ -15,6 +15,7 @@ import categoryRoutes from './modules/categories/categories.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import orderRoutes from './modules/orders/orders.routes.js';
 import os from 'node:os';
+import { metricsMiddleware, metricsHandler } from './metrics.js';
 
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
@@ -33,7 +34,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Instance', instanceId);
   next();
 });
-
+app.use(metricsMiddleware);
 // 1. Security headers, CORS, JSON body, request logging
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
@@ -42,6 +43,7 @@ if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // 2. Health check (never rate limited)
 app.use('/health', healthRoutes);
+app.get('/metrics', metricsHandler);
 
 // 3. The API: every request counts towards the per-IP limit
 app.use('/api/v1', apiLimiter);
