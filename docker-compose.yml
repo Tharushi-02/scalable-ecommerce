@@ -49,6 +49,7 @@ services:
     deploy:
       replicas: 3
     environment:
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-false}
       RATE_LIMIT_API_PER_MIN: ${RATE_LIMIT_API_PER_MIN:-300}
       NODE_ENV: production
       PORT: 4000

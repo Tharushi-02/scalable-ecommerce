@@ -19,6 +19,10 @@ import os from 'node:os';
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
 
+if (env.LOAD_TEST_MODE) {
+  console.warn('⚠️  LOAD_TEST_MODE is ON: all rate limits are disabled. Never use this in production.');
+}
+
 // Which server copy answered (the container ID inside Docker). Useful with replicas.
 const instanceId = os.hostname();
 app.use((req, res, next) => {

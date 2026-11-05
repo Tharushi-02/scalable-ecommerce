@@ -127,3 +127,18 @@ in-flight GETs on healthy replicas, then dropped the dead one via DNS re-resolve
 
 The Windows→VM port forwarding cost ~35% of throughput. Measured from inside Docker,
 3 replicas reach ~2.2x of 1 replica (from Windows). Real Linux servers don't have that hop.
+
+
+
+
+## Day 23: k6 realistic load (mixed journeys with think time, k6 inside Docker's network)
+
+Mix: 70% browse, 20% search, 10% buy (register → cart → checkout → pay).
+Wave: 30 s ramp up, 1 min hold, 15 s ramp down. 3 server replicas, Redis on.
+
+| Peak users | Requests | Req/s | Errors | p95 all | p95 list | p95 search | p95 detail | p95 checkout | p95 pay* | Orders paid | Oversold |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 200 | 8,019 | 72.6 | 0.00% | 11.6 ms | 4.7 ms | 4.6 ms | 4.8 ms | 18.6 ms | 317.5 ms | 233 | 0 |
+
+*pay includes the mock processor's deliberate ~300 ms delay. Register (bcrypt) ~600 ms by design.
+200 concurrent shoppers ≈ 73 req/s, about 2% of the ~3,700 req/s measured with autocannon.

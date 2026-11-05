@@ -1,5 +1,6 @@
 import { redis } from '../db/redis.js';
 import { HttpError } from '../utils/httpError.js';
+import { env } from '../config/env.js';
 
 // Fixed-window rate limiter backed by Redis.
 //   name:          what's being limited ("login", "api", ...)
@@ -7,6 +8,9 @@ import { HttpError } from '../utils/httpError.js';
 //   windowSeconds: the window length
 //   key:           who is being counted (default: their IP address)
 export function rateLimit({ name, limit, windowSeconds, key = (req) => req.ip }) {
+  // Load tests come from one IP, so every limit is switched off (never in production)
+  if (env.LOAD_TEST_MODE) return (req, res, next) => next();
+
   return async (req, res, next) => {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const window = Math.floor(nowSeconds / windowSeconds);
