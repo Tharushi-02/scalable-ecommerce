@@ -12,7 +12,7 @@ export const options = {
       timeUnit: '1s',
       duration: DURATION,
       preAllocatedVUs: Math.min(RATE, 300), // VUs ready at the start
-      maxVUs: Math.max(600, RATE * 2),      // more are added if the server gets slow
+            maxVUs: Math.min(3000, Math.max(600, RATE * 2)), // capped so k6 itself stays healthy
     },
   },
   thresholds: {

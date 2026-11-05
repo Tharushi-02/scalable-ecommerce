@@ -1,15 +1,20 @@
 import * as productService from './products.service.js';
 
-export async function getById(req, res) {
-  const { value: product, hit } = await productService.getProductCached(req.validated.params.id);
+// Send JSON text that is already serialized (from Redis or just built)
+function sendJson(res, json, hit) {
   res.set('X-Cache', hit ? 'HIT' : 'MISS');
-  res.json({ product });
+  res.type('application/json').send(json);
+}
+
+export async function getById(req, res) {
+  const { json, hit } = await productService.getProductCached(req.validated.params.id);
+  // Same response shape as before: { "product": { ... } }
+  sendJson(res, `{"product":${json}}`, hit);
 }
 
 export async function list(req, res) {
-  const { value, hit } = await productService.listProductsCached(req.validated.query);
-  res.set('X-Cache', hit ? 'HIT' : 'MISS');
-  res.json(value);
+  const { json, hit } = await productService.listProductsCached(req.validated.query);
+  sendJson(res, json, hit);
 }
 
 export async function create(req, res) {

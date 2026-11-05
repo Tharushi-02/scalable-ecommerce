@@ -163,3 +163,51 @@ Without Redis the database saturates at ~230 req/s (COUNT(*) + sort over 201k ro
 request, plus waiting for pooled DB connections); extra load only grows the queue.
 With Redis: 1,000+ req/s at p95 2.5 ms, not yet at its limit (see Day 25).
 Headline: ≥4.3x throughput, p95 at 250 req/s 2,316 ms → 2.4 ms (~960x).
+
+
+
+## Day 25: finding the limit (cache on, 3 replicas, k6 constant-arrival-rate)
+
+| Target req/s | Achieved | p50 | p95 | Errors | Dropped |
+|---|---|---|---|---|---|
+| 1,000 | 988 | 1.0 ms | 2.3 ms | 0% | 0 |
+| 2,000 | 1,996 | 1.0 ms | 7.2 ms | 0% | 0 |
+| 3,000 | 2,966 | 1.2 ms | 17.7 ms | 0% | 1,466 |
+| 4,000 | 3,932 | 2.7 ms | 71.1 ms | 0% | 3,748 |
+| 6,000 | 3,940 | 62.1 ms | 314.2 ms | 2.31% | 66,678 |
+
+Ceiling ≈ 3,900–4,000 req/s; comfortable up to ~2,500. Bottleneck: each Node replica at ~94% of its
+single core (Nginx ~100%, k6 ~200%, Redis 22%, Postgres ~0%).
+
+6 replicas on the same 12-core laptop: ~5,000 req/s at overload, but slower at 3,000–4,000
+(CPU contention with Nginx, k6 and Docker's VM). More replicas only help with free cores.
+
+Fix: serve cached JSON text directly (skip JSON.parse + JSON.stringify on every cache hit).
+Fair A/B at 2,000 req/s, alternating versions:
+
+| Round | Version | CPU ms / request | p95 |
+|---|---|---|---|
+| 1 | before | 1.49 | 128.7 ms |
+| 1 | after | 0.95 | 14.8 ms |
+| 2 | before | 1.10 | 35.9 ms |
+| 2 | after | 1.02 | 16.3 ms |
+
+-8% to -37% CPU per request (~-24% average), lower p95 in both rounds.
+~1 ms CPU/request ⇒ ~1,000 req/s per Node core, which matches the ~3,900 req/s ceiling with 3 replicas.
+Lesson: single runs on a busy laptop are noisy (thermal throttling); compare with alternating A/B runs.
+
+
+### Concurrent users (mixed journeys with think time: 70% browse, 20% search, 10% buy)
+
+| Peak users | Req/s | Errors | p95 browse | p95 search | p95 checkout | p95 register | Orders paid |
+|---|---|---|---|---|---|---|---|
+| 1,000 | 351 | 0% | 5.2 ms | 5.1 ms | 30 ms | 142 ms | 1,163 |
+| 2,000 | 695 | 0% | 103 ms | 76 ms | 517 ms | 442 ms | 2,242 |
+| 3,000 | 1,048 | 0% | 127 ms | 95 ms | 474 ms | 569 ms | 3,384 |
+
+At 3,000 users: servers ~66% CPU each, Postgres ~67% (writes from buyers, plus list-cache
+invalidation when products sell out → many simultaneous misses = cache stampede).
+k6 needs ~0.5 MB per VU (1.45 GB at 3,000); 10,000 VUs would need ~5 GB on a 7.6 GB Docker VM,
+so the load generator, not the shop, limits this laptop. Real tests use separate load machines.
+Next fixes to consider: single-flight cache loads (one DB query per key, not hundreds), and not
+invalidating every list when one product sells out.

@@ -6,7 +6,7 @@ import { env } from '../config/env.js';
 // If Redis is down, it just runs loader() (fail open).
 export async function getOrSet(key, ttlSeconds, loader) {
   if (!env.CACHE_ENABLED) return { value: await loader(), hit: false };
-  // ...the rest stays exactly as it is
+
   try {
     const cached = await redis.get(key);
     if (cached !== null) {
@@ -25,4 +25,30 @@ export async function getOrSet(key, ttlSeconds, loader) {
   }
 
   return { value, hit: false };
+}
+
+// Same as getOrSet, but works with the JSON TEXT instead of an object.
+// On a hit, the text from Redis is sent to the client as-is:
+// no JSON.parse and no JSON.stringify, which saves CPU on every request.
+export async function getOrSetJson(key, ttlSeconds, loader) {
+  if (!env.CACHE_ENABLED) return { json: JSON.stringify(await loader()), hit: false };
+
+  try {
+    const cached = await redis.get(key);
+    if (cached !== null) {
+      return { json: cached, hit: true };
+    }
+  } catch {
+    // Redis unavailable: fall through to the database
+  }
+
+  const json = JSON.stringify(await loader());
+
+  try {
+    await redis.set(key, json, 'EX', ttlSeconds);
+  } catch {
+    // Couldn't save it: no problem, the next request just misses again
+  }
+
+  return { json, hit: false };
 }

@@ -2,14 +2,14 @@ import crypto from 'node:crypto';
 import * as repo from './products.repository.js';
 import { HttpError } from '../../utils/httpError.js';
 import { slugify } from '../../utils/slugify.js';
-import { getOrSet } from '../../utils/cache.js';
+import { getOrSetJson } from '../../utils/cache.js';
 import { itemKey, listKeyPrefix, invalidateProducts } from './products.cache.js';
 
 const UNIQUE_VIOLATION = '23505';
 const FOREIGN_KEY_VIOLATION = '23503';
 const CACHE_TTL_SECONDS = 60;
 
-// Database row (snake_case, flat) → API shape (camelCase, nested category)
+// Database row (snake_case, flat) -> API shape (camelCase, nested category)
 export function toProduct(row) {
   return {
     id: row.id,
@@ -63,9 +63,9 @@ export async function listProducts({ page, limit, sort, ...filters }) {
   };
 }
 
-// ---------- Cached reads for the public shop ----------
+// ---------- Cached reads for the public shop (return JSON text) ----------
 
-// Same filters in any order → same key
+// Same filters in any order -> same key
 function queryKey(query) {
   return Object.keys(query)
     .filter((key) => query[key] !== undefined)
@@ -76,11 +76,11 @@ function queryKey(query) {
 
 export async function listProductsCached(query) {
   const prefix = await listKeyPrefix(); // e.g. "products:list:v7:"
-  return getOrSet(`${prefix}${queryKey(query)}`, CACHE_TTL_SECONDS, () => listProducts(query));
+  return getOrSetJson(`${prefix}${queryKey(query)}`, CACHE_TTL_SECONDS, () => listProducts(query));
 }
 
 export function getProductCached(id) {
-  return getOrSet(itemKey(id), CACHE_TTL_SECONDS, () => getProduct(id));
+  return getOrSetJson(itemKey(id), CACHE_TTL_SECONDS, () => getProduct(id));
 }
 
 // ---------- Admin writes (clear the cache AFTER saving) ----------
@@ -100,7 +100,7 @@ export async function createProduct(input) {
         throw new HttpError(400, 'Category does not exist');
       }
       if (err.code === UNIQUE_VIOLATION && err.constraint === 'products_slug_key') {
-        continue; // slug taken → try again with a suffix
+        continue; // slug taken -> try again with a suffix
       }
       throw err;
     }

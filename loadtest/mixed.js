@@ -32,6 +32,7 @@ export const options = {
     'http_req_duration{name:GET /products/:id}': ['p(95)<500'],
     'http_req_duration{name:POST /orders}': ['p(95)<1000'],
     'http_req_duration{name:POST /orders/:id/pay}': ['p(95)<1000'],
+    'http_req_duration{name:POST /auth/register}': ['p(95)<2000'],    
   },
 };
 
