@@ -23,6 +23,10 @@ if (env.LOAD_TEST_MODE) {
   console.warn('⚠️  LOAD_TEST_MODE is ON: all rate limits are disabled. Never use this in production.');
 }
 
+if (!env.CACHE_ENABLED) {
+  console.warn('⚠️  CACHE_ENABLED is false: Redis caching is OFF (baseline test mode).');
+}
+
 // Which server copy answered (the container ID inside Docker). Useful with replicas.
 const instanceId = os.hostname();
 app.use((req, res, next) => {

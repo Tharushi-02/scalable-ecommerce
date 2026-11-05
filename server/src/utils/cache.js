@@ -1,9 +1,12 @@
 import { redis } from '../db/redis.js';
+import { env } from '../config/env.js';
 
 // Cache-aside: return the cached value if there is one,
 // otherwise run loader(), cache its result for ttlSeconds, and return it.
 // If Redis is down, it just runs loader() (fail open).
 export async function getOrSet(key, ttlSeconds, loader) {
+  if (!env.CACHE_ENABLED) return { value: await loader(), hit: false };
+  // ...the rest stays exactly as it is
   try {
     const cached = await redis.get(key);
     if (cached !== null) {

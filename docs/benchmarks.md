@@ -142,3 +142,24 @@ Wave: 30 s ramp up, 1 min hold, 15 s ramp down. 3 server replicas, Redis on.
 
 *pay includes the mock processor's deliberate ~300 ms delay. Register (bcrypt) ~600 ms by design.
 200 concurrent shoppers ≈ 73 req/s, about 2% of the ~3,700 req/s measured with autocannon.
+
+
+## Day 24: baseline without Redis vs with Redis (k6 constant-arrival-rate)
+
+Setup: 201,000 products (Day 18 indexes in place), 3 server replicas, Nginx, k6 inside Docker's network.
+Traffic: 50% product list (80% on pages 1–5), 25% search, 25% product detail. 1 minute per rate.
+Redis flushed before each set (cold start). Only CACHE_ENABLED changed between runs.
+
+| Cache | Target req/s | Achieved req/s | p50 | p95 | Max | Errors | Dropped | Peak in-flight |
+|---|---|---|---|---|---|---|---|---|
+| OFF | 250 | 238 | 727 ms | 2,316 ms | 3,168 ms | 0% | 213 | 457 |
+| OFF | 500 | 227 | 4,323 ms | 5,066 ms | 6,092 ms | 0% | 15,344 | 1,000 |
+| OFF | 1,000 | 225 | 8,591 ms | 10,335 ms | 11,406 ms | 0% | 44,542 | 2,000 |
+| ON | 250 | 249 | 1.2 ms | 2.4 ms | 64 ms | 0% | 0 | 3 |
+| ON | 500 | 499 | 1.0 ms | 1.8 ms | 111 ms | 0% | 0 | 5 |
+| ON | 1,000 | 998 | 1.0 ms | 2.5 ms | 526 ms | 0% | 0 | 45 |
+
+Without Redis the database saturates at ~230 req/s (COUNT(*) + sort over 201k rows per list
+request, plus waiting for pooled DB connections); extra load only grows the queue.
+With Redis: 1,000+ req/s at p95 2.5 ms, not yet at its limit (see Day 25).
+Headline: ≥4.3x throughput, p95 at 250 req/s 2,316 ms → 2.4 ms (~960x).

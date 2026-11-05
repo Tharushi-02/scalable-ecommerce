@@ -12,6 +12,7 @@ const schema = z.object({
   RATE_LIMIT_API_PER_MIN: z.coerce.number().int().min(0).default(300),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   LOAD_TEST_MODE: z.stringbool().default(false),
+  CACHE_ENABLED: z.stringbool().default(true),
 
 });
 
