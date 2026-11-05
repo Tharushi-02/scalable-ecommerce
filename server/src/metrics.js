@@ -25,12 +25,22 @@ export const cacheRequests = new client.Counter({
 
 // Times every request. The route is the PATTERN ("/api/v1/products/:id"),
 // not the real URL, so 200,000 products don't create 200,000 separate lines.
+// Route label = the route PATTERN with its full prefix, e.g. "/api/v1/orders/:id/pay".
+// Built from the URL because Express clears req.baseUrl when an error leaves a router.
+function routeLabel(req) {
+  if (!req.route) return 'unmatched';
+  const patternParts = req.route.path.split('/').filter(Boolean);       // ['..', ':id', 'pay']
+  const urlParts = req.originalUrl.split('?')[0].split('/').filter(Boolean);
+  const prefix = urlParts.slice(0, urlParts.length - patternParts.length);
+  return '/' + [...prefix, ...patternParts].join('/');
+}
+
+// Times every request, labelled by route pattern (not the real URL),
+// so 200,000 products don't create 200,000 separate series.
 export function metricsMiddleware(req, res, next) {
   const end = httpRequestDuration.startTimer();
   res.on('finish', () => {
-        const path = `${req.baseUrl}${req.route?.path ?? ''}`.replace(/\/$/, '') || '/';
-    const route = req.route ? path : 'unmatched';
-    end({ method: req.method, route, status: String(res.statusCode) });
+    end({ method: req.method, route: routeLabel(req), status: String(res.statusCode) });
   });
   next();
 }
