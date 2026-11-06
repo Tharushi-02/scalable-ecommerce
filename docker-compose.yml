@@ -32,7 +32,7 @@ services:
   migrate:
     build: ./server
     image: ecom-server:latest
-    command: ["npm", "run", "migrate", "up"]
+    command: ["node_modules/.bin/node-pg-migrate", "-m", "migrations", "--migration-file-language", "sql", "up"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
