@@ -1,3 +1,5 @@
+﻿[![CI](https://github.com/Tharushi-02/scalable-ecommerce/actions/workflows/ci.yml/badge.svg)](https://github.com/Tharushi-02/scalable-ecommerce/actions/workflows/ci.yml)
+
 # Scalable E-Commerce Platform
 
 A scalable e-commerce platform built with Redis caching and Dockerized

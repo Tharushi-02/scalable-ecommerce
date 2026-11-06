@@ -75,10 +75,10 @@ jobs:
       - name: Start the stack
         run: docker compose up -d --build client
 
-      - name: Wait until the API answers through Nginx
+      - name: Wait until Nginx is serving the site
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/api/v1/categories > /dev/null; then
+            if curl -sf http://localhost:8080/ > /dev/null; then
               echo "Ready after ${i}x2 seconds"; exit 0
             fi
             sleep 2
@@ -144,3 +144,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
