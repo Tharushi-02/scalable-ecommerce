@@ -7,7 +7,7 @@ import { env } from '../config/env.js';
 //   limit:         how many requests are allowed per window
 //   windowSeconds: the window length
 //   key:           who is being counted (default: their IP address)
-export function rateLimit({ name, limit, windowSeconds, key = (req) => req.ip }) {
+export function rateLimit({ name, limit, windowSeconds, key }) {
   // Load tests come from one IP, so every limit is switched off (never in production)
   if (env.LOAD_TEST_MODE) return (req, res, next) => next();
 
