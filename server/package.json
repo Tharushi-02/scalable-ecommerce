@@ -13,8 +13,9 @@
     "migrate:down": "node-pg-migrate -m migrations --migration-file-language sql down",
     "migrate:up": "node-pg-migrate -m migrations --migration-file-language sql up",
     "migrate:create": "node-pg-migrate -m migrations --migration-file-language sql create",
-    "seed": "node --env-file=.env src/db/seed.js",
-    "race": "node --env-file=.env scripts/race-test.js"
+    "seed": "node --env-file-if-exists=.env src/db/seed.js",
+    "race": "node --env-file=.env scripts/race-test.js",
+    "test:api": "node --test test/api.test.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
