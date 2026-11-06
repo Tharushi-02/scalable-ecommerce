@@ -2,8 +2,9 @@
 
 # Scalable E-Commerce Platform
 
-A scalable e-commerce platform built with Redis caching and Dockerized
-deployment, load tested to 10,000+ concurrent users.
+A scalable e-commerce platform with Redis caching, Nginx load balancing across replicas, and a
+Dockerized deployment. Load tested with k6: 3,000 concurrent shoppers at 0% errors, ~3,900 req/s
+peak on a single laptop, and Redis lifting throughput from ~230 to 1,000+ req/s.
 
 > Work in progress: building day by day over 30 days.
 

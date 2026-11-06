@@ -3,21 +3,22 @@ import { env } from '../config/env.js';
 
 const emailOf = (req) => String(req.body?.email ?? '').trim().toLowerCase();
 
-// Every /api/v1 request, per IP. 0 in .env switches it off (for load tests).
+// Every /api/v1 request, per IP (IPv6 per /64). 0 switches it off (load tests).
 export const apiLimiter =
   env.RATE_LIMIT_API_PER_MIN > 0
     ? rateLimit({ name: 'api', limit: env.RATE_LIMIT_API_PER_MIN, windowSeconds: 60 })
     : (req, res, next) => next();
 
-// Guessing one account's password
+// Guessing ONE account's password: counted per email, from ANY IP,
+// so switching IPs (easy with IPv6) doesn't give fresh attempts.
 export const loginPerAccount = rateLimit({
   name: 'login',
   limit: 5,
   windowSeconds: 60,
-  key: (req) => `${req.ip}:${emailOf(req)}`,
+  key: emailOf,
 });
 
-// One machine trying many accounts
+// One machine (or one IPv6 /64) trying many accounts
 export const loginPerIp = rateLimit({ name: 'login-ip', limit: 20, windowSeconds: 60 });
 
 // Bots creating accounts

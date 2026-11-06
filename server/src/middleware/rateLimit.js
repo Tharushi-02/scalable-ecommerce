@@ -1,13 +1,32 @@
+import net from 'node:net';
 import { redis } from '../db/redis.js';
 import { HttpError } from '../utils/httpError.js';
 import { env } from '../config/env.js';
+
+// Who is "one visitor" for per-IP limits:
+// - IPv4: the address itself
+// - IPv6: the /64 block (first 4 groups). One home or phone gets a whole /64
+//   (billions of addresses), so counting single IPv6 addresses is easy to dodge.
+export function ipKey(ip = '') {
+  if (ip.startsWith('::ffff:')) return ip.slice(7); // IPv4 written in IPv6 form
+  if (!net.isIPv6(ip)) return ip;
+
+  const [head, tail = ''] = ip.split('%')[0].split('::');
+  const headParts = head ? head.split(':') : [];
+  const tailParts = tail ? tail.split(':') : [];
+  const groups = ip.includes('::')
+    ? [...headParts, ...Array(8 - headParts.length - tailParts.length).fill('0'), ...tailParts]
+    : headParts;
+
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
 
 // Fixed-window rate limiter backed by Redis.
 //   name:          what's being limited ("login", "api", ...)
 //   limit:         how many requests are allowed per window
 //   windowSeconds: the window length
-//   key:           who is being counted (default: their IP address)
-export function rateLimit({ name, limit, windowSeconds, key = (req) => req.ip }) {
+//   key:           who is being counted (default: their IP, IPv6 grouped by /64)
+export function rateLimit({ name, limit, windowSeconds, key = (req) => ipKey(req.ip) }) {
   // Load tests come from one IP, so every limit is switched off (never in production)
   if (env.LOAD_TEST_MODE) return (req, res, next) => next();
 
