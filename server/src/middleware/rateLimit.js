@@ -26,7 +26,16 @@ export function ipKey(ip = '') {
 //   limit:         how many requests are allowed per window
 //   windowSeconds: the window length
 //   key:           who is being counted (default: their IP, IPv6 grouped by /64)
-export function rateLimit({ name, limit, windowSeconds, key = (req) => ipKey(req.ip) }) {
+//   onlyFailures:  if true, successful responses (status < 400) are taken back off the count,
+//                  so only FAILED attempts add up (used for login: a user who types the right
+//                  password doesn't use up their own allowance)
+export function rateLimit({
+  name,
+  limit,
+  windowSeconds,
+  key = (req) => ipKey(req.ip),
+  onlyFailures = false,
+}) {
   // Load tests come from one IP, so every limit is switched off (never in production)
   if (env.LOAD_TEST_MODE) return (req, res, next) => next();
 
@@ -57,6 +66,12 @@ export function rateLimit({ name, limit, windowSeconds, key = (req) => ipKey(req
     if (count > limit) {
       res.set('Retry-After', String(resetIn));
       throw new HttpError(429, `Too many requests. Please try again in ${resetIn} seconds.`);
+    }
+
+    if (onlyFailures) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) redis.decr(redisKey).catch(() => {});
+      });
     }
 
     next();

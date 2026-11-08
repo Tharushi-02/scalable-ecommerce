@@ -73,7 +73,7 @@ export default function LoginPage() {
       </p>
 
       <p className="muted small">
-        Demo accounts: customer1@example.com or admin@example.com, password Password123!
+        Demo account: customer1@example.com, password Password123!
       </p>
     </section>
   );

@@ -2,7 +2,12 @@ import { Router } from 'express';
 import * as authController from './auth.controller.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import { validate } from '../../middleware/validate.js';
-import { loginPerAccount, loginPerIp, registerPerIp } from '../../middleware/limits.js';
+import {
+  loginPerAccount,
+  loginPerAccountPerIp,
+  loginPerIp,
+  registerPerIp,
+} from '../../middleware/limits.js';
 import { registerSchema, loginSchema, refreshSchema } from './auth.schemas.js';
 
 const router = Router();
@@ -14,6 +19,7 @@ router.post('/register', validate({ body: registerSchema }), registerPerIp, auth
 router.post(
   '/login',
   loginPerIp,
+  loginPerAccountPerIp,
   loginPerAccount,
   validate({ body: loginSchema }),
   authController.login,

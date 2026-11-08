@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { faker } from '@faker-js/faker';
 import bcrypt from 'bcryptjs';
 import { pool } from './pool.js';
@@ -6,7 +7,19 @@ import { slugify } from '../utils/slugify.js';
 const PRODUCT_COUNT = 1000;
 const CUSTOMER_COUNT = 20;
 const BATCH_SIZE = 250;
-const DEV_PASSWORD = 'Password123!';
+// Demo CUSTOMER accounts share a known password on purpose (shown on the login page).
+const CUSTOMER_PASSWORD = 'Password123!';
+
+// The ADMIN password is never fixed: it comes from SEED_ADMIN_PASSWORD (e.g. in your
+// local server/.env for dev), or a random one is generated and printed once.
+const ADMIN_PASSWORD_FROM_ENV = Boolean(process.env.SEED_ADMIN_PASSWORD);
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(12).toString('base64url');
+
+// Seeding WIPES the database, so refuse to run against production unless told to.
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+  console.error('Refusing to seed: NODE_ENV is production (set ALLOW_PRODUCTION_SEED=true to override).');
+  process.exit(1);
+}
 
 const CATEGORIES = [
   'Electronics',
@@ -63,11 +76,12 @@ async function seed() {
     );
     const categoryIds = categoryRows.map((row) => row.id);
 
-    // 3. Users (1 admin + customers), all with the same dev password
-    const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
-    const users = [['Admin User', 'admin@example.com', passwordHash, 'admin']];
+    // 3. Users: 1 admin (own password) + demo customers (shared demo password)
+    const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    const customerHash = await bcrypt.hash(CUSTOMER_PASSWORD, 10);
+    const users = [['Admin User', 'admin@example.com', adminHash, 'admin']];
     for (let i = 1; i <= CUSTOMER_COUNT; i++) {
-      users.push([faker.person.fullName(), `customer${i}@example.com`, passwordHash, 'customer']);
+      users.push([faker.person.fullName(), `customer${i}@example.com`, customerHash, 'customer']);
     }
     await insertMany(client, 'users', ['name', 'email', 'password_hash', 'role'], users);
 
@@ -103,7 +117,13 @@ async function seed() {
 
     console.log('✅ Seed complete');
     console.log(`   ${CATEGORIES.length} categories`);
-    console.log(`   ${users.length} users (password for all: ${DEV_PASSWORD})`);
+    console.log(`   ${CUSTOMER_COUNT} demo customers (password: ${CUSTOMER_PASSWORD})`);
+    if (ADMIN_PASSWORD_FROM_ENV) {
+      console.log('   admin@example.com (password from SEED_ADMIN_PASSWORD)');
+    } else {
+      console.log(`   admin@example.com, password: ${ADMIN_PASSWORD}`);
+      console.log('   ^ random, shown only once: save it now');
+    }
     console.log(`   ${PRODUCT_COUNT} products`);
   } catch (err) {
     await client.query('ROLLBACK');
